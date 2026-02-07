@@ -14,7 +14,13 @@ def create_plan(plan: schemas.PlanCreate, db: Session = Depends(get_db)):
     db.refresh(db_plan)
     
     for item in plan.items:
-        db_item = models.PlanItem(plan_id=db_plan.id, content=item.content, is_completed=item.is_completed)
+        db_item = models.PlanItem(
+            plan_id=db_plan.id, 
+            content=item.content, 
+            priority=item.priority,
+            due_date=item.due_date,
+            is_completed=item.is_completed
+        )
         db.add(db_item)
     
     db.commit()
@@ -23,6 +29,8 @@ def create_plan(plan: schemas.PlanCreate, db: Session = Depends(get_db)):
 
 @router.get("", response_model=List[schemas.Plan])
 def read_plans(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    # Sort plans by created_at desc, and within each plan, items will be handled in detail view or we can try to order here if needed.
+    # Actually, relationship ordering is better in models.py or manual sort.
     plans = db.query(models.Plan).order_by(models.Plan.created_at.desc()).offset(skip).limit(limit).all()
     return plans
 

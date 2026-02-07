@@ -19,7 +19,10 @@ class PlanItem(Base):
     id = Column(Integer, primary_key=True, index=True)
     plan_id = Column(Integer, ForeignKey("plans.id"))
     content = Column(String)
+    priority = Column(Integer, default=2) # 1: High, 2: Medium, 3: Low
+    due_date = Column(DateTime, nullable=True)
     is_completed = Column(Boolean, default=False)
+    understanding_score = Column(Integer, default=0) # 0-100
     
     plan = relationship("Plan", back_populates="items")
 
@@ -29,3 +32,9 @@ class Memo(Base):
     id = Column(Integer, primary_key=True, index=True)
     content = Column(Text)
     created_at = Column(DateTime, default=datetime.now)
+
+class UserSettings(Base):
+    __tablename__ = "user_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    learning_mode = Column(String, default="supportive") # "exam" or "supportive"

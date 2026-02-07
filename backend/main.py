@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine
 from app import models
-from app.routers import chat, upload, plans, memos
+from app.routers import chat, upload, plans, memos, settings
 
 # Create Database Tables
 models.Base.metadata.create_all(bind=engine)
@@ -29,6 +29,7 @@ app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
 app.include_router(plans.router, prefix="/api/plans", tags=["plans"])
 app.include_router(memos.router, prefix="/api/memos", tags=["memos"])
+app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
 
 @app.get("/health")
 def health_check():

@@ -27,7 +27,7 @@ export const uploadImage = async (sessionId: string, file: File) => {
   return res.json();
 };
 
-export const sendChatMessage = async (message: string, sessionId?: string, imageUrl?: string) => {
+export const sendChatMessage = async (message: string, sessionId?: string, imageUrl?: string, currentMissionId?: number) => {
   const res = await fetch(`${API_BASE_URL}/chat/`, {
     method: 'POST',
     headers: {
@@ -37,6 +37,7 @@ export const sendChatMessage = async (message: string, sessionId?: string, image
       message,
       session_id: sessionId,
       image_url: imageUrl,
+      current_mission_id: currentMissionId
     }),
   });
 
@@ -100,4 +101,21 @@ export const deleteMemo = async (id: number) => {
   });
   if (!res.ok) throw new Error('Failed to delete memo');
   return true;
+};
+
+/* --- Settings API --- */
+export const getSettings = async () => {
+  const res = await fetch(`${API_BASE_URL}/settings/`);
+  if (!res.ok) throw new Error('Failed to fetch settings');
+  return res.json();
+};
+
+export const updateSettings = async (learningMode: string) => {
+  const res = await fetch(`${API_BASE_URL}/settings/`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ learning_mode: learningMode }),
+  });
+  if (!res.ok) throw new Error('Failed to update settings');
+  return res.json();
 };

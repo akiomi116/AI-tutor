@@ -1,8 +1,16 @@
 import os
-from fastapi import APIRouter, HTTPException
-from app.schemas import ChatMessage, ChatResponse
+import re
+import sys
+import asyncio
+import random
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
 import google.generativeai as genai
 from dotenv import load_dotenv
+
+from app.schemas import ChatMessage, ChatResponse
+from app.database import get_db
+from app import models
 
 load_dotenv()
 
@@ -16,56 +24,85 @@ if api_key:
 else:
     model = None
 
-import sys
-
-import asyncio
-import random
-
-import re
-
 @router.post("", response_model=ChatResponse)
-async def chat_endpoint(chat_msg: ChatMessage):
-    print(f"DEBUG: Received chat message: {chat_msg.message[:50]}...", file=sys.stderr, flush=True)
-    
+async def chat_endpoint(chat_msg: ChatMessage, db: Session = Depends(get_db)):
     if not model:
-        print("DEBUG: Model is not configured", file=sys.stderr, flush=True)
         return ChatResponse(response="API Key not configured. Please set GEMINI_API_KEY in backend/.env")
     
-    # Retry configuration
-    max_retries = 5
-    print("DEBUG: LOADED RETRY LOGIC V2 (Max 5 attempts)", file=sys.stderr, flush=True)
+    # Fetch User Settings
+    settings = db.query(models.UserSettings).first()
+    if not settings:
+        settings = models.UserSettings(learning_mode="supportive")
+        db.add(settings)
+        db.commit()
     
+    mode = settings.learning_mode
+    
+    # Context gathering
+    mission_context = ""
+    if chat_msg.current_mission_id:
+        mission = db.query(models.PlanItem).filter(models.PlanItem.id == chat_msg.current_mission_id).first()
+        if mission:
+            mission_context = f"\n\n[現在取り組んでいるミッション: {mission.content}]\n"
+            mission_context += f"このユーザーの現在の理解度スコア: {mission.understanding_score}/100\n"
+            mission_context += "ユーザーがこのミッションの内容を理解しているか、対話を通じて評価してください。"
+
+    # Define Persona and Rules based on mode
+    if mode == "exam":
+        system_instr = (
+            "あなたは進学塾のトップ講師です（受験モード）。\n"
+            "生徒が『初見の入試問題』を解ける実力があるか、一切の妥協なく厳格に審査してください。\n"
+            "【評価基準】\n"
+            "- 論理性、正確性、および『自分の言葉』での説明能力を最重視します。\n"
+            "- 完了（80%以上）には、試験会場で自力で正解を導き出せる確信が必要です。\n"
+            "- 回答の最後に必ず [[SCORE: 数値]] (0-100) を付与してください。"
+        )
+    else:
+        system_instr = (
+            "あなたは優しい学習メンターです（支援モード）。\n"
+            "生徒のやる気を引き出し、小さな成長やメタ認知（わからないと言えたこと）を褒めてください。\n"
+            "【評価基準】\n"
+            "- 努力・参加 (0-40%): 質問、対話への応答、ヒントを元に考えたプロセスを高く評価します。\n"
+            "- 理解・気づき (40-100%): 自分の言葉での説明ができたら、積極的にスコアを上げてください。\n"
+            "- 完了閾値（60%）を目指して、優しくガイドしてください。\n"
+            "- 回答の最後に必ず [[SCORE: 数値]] (0-100) を付与してください。"
+        )
+
+    full_prompt = f"{system_instr}{mission_context}\n\nユーザー: {chat_msg.message}"
+    
+    max_retries = 5
     for attempt in range(max_retries):
         try:
-            # Generate content asynchronously
-            response = await model.generate_content_async(chat_msg.message)
-            print("DEBUG: Gemini response received successfully", file=sys.stderr, flush=True)
-            return ChatResponse(response=response.text)
+            response = await model.generate_content_async(full_prompt)
+            raw_text = response.text
+            
+            # Extract score
+            score = None
+            score_match = re.search(r"\[\[SCORE:\s*(\d+)\]\]", raw_text)
+            if score_match:
+                score = int(score_match.group(1))
+                # Remove the score tag from the public response
+                clean_text = re.sub(r"\[\[SCORE:\s*\d+\]\]", "", raw_text).strip()
+            else:
+                clean_text = raw_text
+
+            # Update DB if score found and mission exists
+            if score is not None and chat_msg.current_mission_id:
+                mission = db.query(models.PlanItem).filter(models.PlanItem.id == chat_msg.current_mission_id).first()
+                if mission:
+                    # Score is cumulative
+                    if score > mission.understanding_score:
+                        mission.understanding_score = score
+                        db.commit()
+
+            return ChatResponse(response=clean_text, understanding_score=score)
             
         except Exception as e:
             error_str = str(e)
-            print(f"DEBUG: Attempt {attempt+1} failed with error: {error_str[:100]}...", file=sys.stderr, flush=True)
-            
-            # Check if it's a rate limit (429) error
             if "429" in error_str and attempt < max_retries - 1:
-                wait_time = 5.0 # Default fallback
-                
-                # Try to extract the requested wait time from the error message
-                # Pattern: "Please retry in 16.489711429s."
-                match = re.search(r"retry in (\d+(\.\d+)?)s", error_str)
-                if match:
-                    wait_time = float(match.group(1)) + 1.0 # Add 1s buffer
-                else:
-                    # Exponential backoff if specific time not found
-                    wait_time = 2 * (2 ** attempt) + random.uniform(0, 1)
-
-                print(f"WARNING: Rate limit hit (429). Retrying in {wait_time:.2f}s...", file=sys.stderr, flush=True)
+                wait_time = 2 * (2 ** attempt) + random.uniform(0, 1)
                 await asyncio.sleep(wait_time)
                 continue
             
-            # If successful within retries, the loop returns. 
-            # If we reach here, it's either not a 429 or we ran out of retries.
             print(f"CHAT ENDPOINT ERROR: {e}", file=sys.stderr, flush=True) 
-            import traceback
-            traceback.print_exc()
-            raise HTTPException(status_code=500, detail=f"Gemini API Error: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))

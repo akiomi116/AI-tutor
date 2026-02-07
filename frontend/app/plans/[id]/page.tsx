@@ -7,6 +7,8 @@ import { getPlan, updatePlanItem } from '@/lib/api';
 interface PlanItem {
     id: number;
     content: string;
+    priority: number;
+    due_date?: string;
     is_completed: boolean;
 }
 
@@ -70,54 +72,94 @@ export default function PlanDetailPage({ params }: { params: Promise<{ id: strin
     const completedCount = plan.items.filter(i => i.is_completed).length;
     const progress = plan.items.length > 0 ? (completedCount / plan.items.length) * 100 : 0;
 
+    const sortedItems = plan ? [...plan.items].sort((a, b) => {
+        if (a.is_completed !== b.is_completed) return a.is_completed ? 1 : -1;
+        return a.priority - b.priority;
+    }) : [];
+
+    const nextMission = sortedItems.find(i => !i.is_completed);
+
     return (
-        <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 p-8">
-            <div className="max-w-3xl mx-auto">
-                <header className="mb-8">
-                    <Link href="/plans" className="text-indigo-600 hover:text-indigo-800 text-sm mb-4 inline-block">
-                        ← 一覧に戻る
-                    </Link>
-                    <div className="flex justify-between items-end">
-                        <div>
-                            <h1 className="text-3xl font-bold text-gray-800">{plan.title}</h1>
-                            {plan.target && <p className="text-lg text-gray-600 mt-2">目標: {plan.target}</p>}
-                        </div>
+        <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8">
+            <div className="max-w-4xl mx-auto">
+                <Link href="/" className="inline-flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition-colors mb-8 font-bold text-sm">
+                    ← ダッシュボードに戻る
+                </Link>
+
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12">
+                    <div>
+                        <h1 className="text-4xl font-black text-slate-900 mb-2">{plan?.title}</h1>
+                        <p className="text-slate-500 font-medium">作成日: {plan && new Date(plan.created_at).toLocaleDateString()}</p>
+                    </div>
+                    <div className="bg-white px-6 py-4 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4">
                         <div className="text-right">
-                            <div className="text-3xl font-bold text-indigo-600">{Math.round(progress)}%</div>
-                            <div className="text-sm text-gray-500">達成率</div>
+                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">達成率</div>
+                            <div className="text-2xl font-black text-indigo-600">
+                                {plan ? Math.round((plan.items.filter(i => i.is_completed).length / plan.items.length) * 100) : 0}%
+                            </div>
+                        </div>
+                        <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-black">
+                            {plan?.items.filter(i => i.is_completed).length}/{plan?.items.length}
                         </div>
                     </div>
+                </div>
 
-                    <div className="w-full bg-white/50 rounded-full h-4 mt-4 overflow-hidden">
-                        <div
-                            className="bg-gradient-to-r from-blue-500 to-indigo-600 h-4 rounded-full transition-all duration-500"
-                            style={{ width: `${progress}%` }}
-                        ></div>
+                {nextMission && (
+                    <div className="bg-indigo-600 rounded-[2.5rem] p-10 text-white mb-12 shadow-2xl shadow-indigo-200 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-6 opacity-10 text-8xl font-black italic">NEXT</div>
+                        <div className="relative z-10">
+                            <div className="bg-white/20 backdrop-blur-md px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest inline-block mb-4">
+                                現在のミッション
+                            </div>
+                            <h2 className="text-3xl md:text-4xl font-black mb-8 leading-tight">
+                                {nextMission.content}
+                            </h2>
+                            <button
+                                onClick={() => handleToggle(nextMission.id, false)}
+                                className="bg-white text-indigo-600 px-10 py-5 rounded-2xl font-black hover:scale-105 active:scale-95 transition-all shadow-xl"
+                            >
+                                完了にする ✨
+                            </button>
+                        </div>
                     </div>
-                </header>
+                )}
 
-                <div className="bg-white/80 backdrop-blur-md rounded-3xl p-8 shadow-xl border border-white/50">
-                    <h2 className="text-xl font-bold text-gray-700 mb-6 border-b pb-2">チェックリスト</h2>
-                    <ul className="space-y-4">
-                        {plan.items.map((item) => (
-                            <li key={item.id} className="group flex items-start p-3 hover:bg-white/50 rounded-xl transition-colors">
-                                <input
-                                    type="checkbox"
-                                    checked={item.is_completed}
-                                    onChange={() => handleToggle(item.id, item.is_completed)}
-                                    className="mt-1 h-5 w-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
-                                />
-                                <span
-                                    className={`ml-3 flex-1 text-gray-800 transition-all ${item.is_completed ? 'line-through text-gray-400' : ''
-                                        }`}
+                <div className="bg-white rounded-[2.5rem] p-8 md:p-12 shadow-sm border border-slate-100">
+                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-8 flex items-center gap-2">
+                        <span>📋</span> 全てのステップ
+                    </h3>
+                    <div className="space-y-4">
+                        {sortedItems.map((item) => (
+                            <div
+                                key={item.id}
+                                className={`flex items-center gap-6 p-6 rounded-3xl transition-all border ${item.is_completed
+                                        ? 'bg-slate-50 border-transparent opacity-60'
+                                        : 'bg-white border-slate-100 hover:border-indigo-200 hover:shadow-md'
+                                    }`}
+                            >
+                                <button
                                     onClick={() => handleToggle(item.id, item.is_completed)}
-                                    style={{ cursor: 'pointer' }}
+                                    className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${item.is_completed
+                                            ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-100'
+                                            : 'bg-slate-100 text-transparent hover:bg-slate-200'
+                                        }`}
                                 >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                </button>
+                                <div className={`flex-1 font-bold text-lg ${item.is_completed ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
                                     {item.content}
-                                </span>
-                            </li>
+                                </div>
+                                {!item.is_completed && (
+                                    <div className={`text-[10px] font-black px-3 py-1 rounded-full uppercase ${item.priority === 1 ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-500'
+                                        }`}>
+                                        {item.priority === 1 ? '優先' : '通常'}
+                                    </div>
+                                )}
+                            </div>
                         ))}
-                    </ul>
+                    </div>
                 </div>
             </div>
         </div>

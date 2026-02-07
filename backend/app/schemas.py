@@ -6,9 +6,11 @@ class ChatMessage(BaseModel):
     message: str
     session_id: Optional[str] = None
     image_url: Optional[str] = None
+    current_mission_id: Optional[int] = None
 
 class ChatResponse(BaseModel):
     response: str
+    understanding_score: Optional[int] = None
 
 class SessionStatus(BaseModel):
     session_id: str
@@ -18,7 +20,10 @@ class SessionStatus(BaseModel):
 # --- Plan Schemas ---
 class PlanItemBase(BaseModel):
     content: str
+    priority: int = 2
+    due_date: Optional[datetime] = None
     is_completed: bool = False
+    understanding_score: int = 0
 
 class PlanItemCreate(PlanItemBase):
     pass
@@ -55,6 +60,16 @@ class MemoCreate(MemoBase):
 class Memo(MemoBase):
     id: int
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# --- Settings Schemas ---
+class UserSettingsBase(BaseModel):
+    learning_mode: str = "supportive"
+
+class UserSettings(UserSettingsBase):
+    id: int
 
     class Config:
         from_attributes = True
