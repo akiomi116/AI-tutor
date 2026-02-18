@@ -1,44 +1,48 @@
 import datetime
 import uuid
 import os
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from sqlalchemy.orm import Session
+from app import models
+from app.database import get_db
 from app.schemas import SessionStatus
+from app.deps import get_current_user
 from typing import Dict
 
 router = APIRouter()
-
-# In-memory session store for MVP
-# session_id -> { "has_image": bool, "image_path": str | None, "created_at": datetime }
-sessions: Dict[str, dict] = {}
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.get("/session/new", response_model=SessionStatus)
-def create_session():
+def create_session(db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
     session_id = str(uuid.uuid4())
-    sessions[session_id] = {
-        "has_image": False,
-        "image_path": None,
-        "created_at": datetime.datetime.now()
-    }
+    db_session = models.UploadSession(
+        user_id=user.id,
+        session_id=session_id,
+        has_image=False,
+        image_path=None
+    )
+    db.add(db_session)
+    db.commit()
     return SessionStatus(session_id=session_id, has_image=False)
 
 @router.get("/session/{session_id}/status", response_model=SessionStatus)
-def get_session_status(session_id: str):
-    if session_id not in sessions:
+def get_session_status(session_id: str, db: Session = Depends(get_db)):
+    db_session = db.query(models.UploadSession).filter(models.UploadSession.session_id == session_id).first()
+    if not db_session:
         raise HTTPException(status_code=404, detail="Session not found")
     
-    session = sessions[session_id]
     return SessionStatus(
         session_id=session_id,
-        has_image=session["has_image"],
-        image_path=session["image_path"]
+        has_image=db_session.has_image,
+        image_path=db_session.image_path
     )
 
 @router.post("/upload/{session_id}")
-async def upload_image(session_id: str, file: UploadFile = File(...)):
-    if session_id not in sessions:
+async def upload_image(session_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    db_session = db.query(models.UploadSession).filter(models.UploadSession.session_id == session_id).first()
+    if not db_session:
         raise HTTPException(status_code=404, detail="Session not found")
     
     # Save file
@@ -51,10 +55,26 @@ async def upload_image(session_id: str, file: UploadFile = File(...)):
             content = await file.read()
             buffer.write(content)
             
-        sessions[session_id]["has_image"] = True
-        sessions[session_id]["image_path"] = file_path
+        # Normalize path for web/URL usage (especially on Windows)
+        web_path = file_path.replace("\\", "/")
+            
+        db_session.has_image = True
+        db_session.image_path = web_path
+        db.commit()
         
-        return {"status": "success", "file_path": file_path}
+        return {"status": "success", "file_path": web_path}
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/session/{session_id}/clear")
+def clear_session_image(session_id: str, db: Session = Depends(get_db)):
+    db_session = db.query(models.UploadSession).filter(models.UploadSession.session_id == session_id).first()
+    if not db_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    db_session.has_image = False
+    db_session.image_path = None
+    db.commit()
+    
+    return {"status": "success", "message": "Session image status cleared"}

@@ -11,6 +11,19 @@ class ChatMessage(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     understanding_score: Optional[int] = None
+    extracted_result: Optional[str] = None
+
+class ChatHistoryItem(BaseModel):
+    id: int
+    role: str
+    content: str
+    image_url: Optional[str] = None
+    understanding_score: Optional[int] = None
+    mission_id: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 class SessionStatus(BaseModel):
     session_id: str
@@ -24,6 +37,7 @@ class PlanItemBase(BaseModel):
     due_date: Optional[datetime] = None
     is_completed: bool = False
     understanding_score: int = 0
+    last_result: Optional[str] = None
 
 class PlanItemCreate(PlanItemBase):
     pass
@@ -63,6 +77,9 @@ class Memo(MemoBase):
 
     class Config:
         from_attributes = True
+
+class AdminLogItem(ChatHistoryItem):
+    username: str
 
 # --- Settings Schemas ---
 class UserSettingsBase(BaseModel):

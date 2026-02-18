@@ -1,8 +1,9 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine
 from app import models
-from app.routers import chat, upload, plans, memos, settings
+from app.routers import chat, upload, plans, memos, settings, admin
 
 # Create Database Tables
 models.Base.metadata.create_all(bind=engine)
@@ -30,6 +31,10 @@ app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
 app.include_router(plans.router, prefix="/api/plans", tags=["plans"])
 app.include_router(memos.router, prefix="/api/memos", tags=["memos"])
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+
+# Serve static files for uploaded images
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 @app.get("/health")
 def health_check():

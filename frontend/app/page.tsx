@@ -1,15 +1,26 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { createSession, getSessionStatus, sendChatMessage, createPlan, getPlans, updatePlanItem, getSettings, updateSettings } from '@/lib/api';
+import { useSearchParams } from 'next/navigation';
+import { createSession, getSessionStatus, sendChatMessage, createPlan, getPlans, updatePlanItem, getSettings, updateSettings, getChatHistory, clearSessionImage } from '@/lib/api';
 import VoiceInput from '@/components/VoiceInput';
 import PlanListWidget from '@/components/PlanListWidget';
 import MemoPad from '@/components/MemoPad';
 import Link from 'next/link';
 
 export default function Home() {
-  const [messages, setMessages] = useState<{ role: 'user' | 'ai'; content: string; imageUrl?: string }[]>([]);
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <HomeContent />
+    </Suspense>
+  );
+}
+
+function HomeContent() {
+  const searchParams = useSearchParams();
+  const missionIdParam = searchParams.get('missionId');
+  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string; imageUrl?: string }[]>([]);
   const [input, setInput] = useState('');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
@@ -22,16 +33,51 @@ export default function Home() {
 
   // Initialize session for QR upload
   useEffect(() => {
-    const initSession = async () => {
-      try {
-        const data = await createSession();
-        setSessionId(data.session_id);
-        const url = `http://192.168.10.101:9000/mobile/${data.session_id}`;
-        setQrUrl(url);
-      } catch (e) {
-        console.error("Failed to create session", e);
+    const initApp = async () => {
+      // 1. Try to restore session from localStorage
+      let sid = localStorage.getItem('ai_tutor_session_id');
+      let restoredHistory = false;
+
+      if (sid) {
+        try {
+          // Verify session exists and load history
+          const [status, history] = await Promise.all([
+            getSessionStatus(sid),
+            getChatHistory(sid)
+          ]);
+
+          if (history && history.length > 0) {
+            setMessages(history.map((m: any) => ({
+              role: m.role === 'user' ? 'user' : 'assistant',
+              content: m.content,
+              imageUrl: m.image_url
+            })));
+            restoredHistory = true;
+          }
+          setSessionId(sid);
+          const url = `http://192.168.10.101:9000/mobile/${sid}`;
+          setQrUrl(url);
+        } catch (e) {
+          console.warn("Session invalid or history failed to load, creating new one", e);
+          sid = null;
+          localStorage.removeItem('ai_tutor_session_id');
+        }
+      }
+
+      // 2. If no sid or restoration failed, create a new session
+      if (!sid) {
+        try {
+          const data = await createSession();
+          setSessionId(data.session_id);
+          localStorage.setItem('ai_tutor_session_id', data.session_id);
+          const url = `http://192.168.10.101:9000/mobile/${data.session_id}`;
+          setQrUrl(url);
+        } catch (e) {
+          console.error("Failed to create session", e);
+        }
       }
     };
+
     const initSettings = async () => {
       try {
         const data = await getSettings();
@@ -40,10 +86,11 @@ export default function Home() {
         console.error("Failed to fetch settings", e);
       }
     };
-    initSession();
+
+    initApp();
     initSettings();
-    fetchNextMission();
-  }, []);
+    fetchNextMission(missionIdParam ? Number(missionIdParam) : undefined);
+  }, [missionIdParam]);
 
   const handleModeChange = async (newMode: string) => {
     try {
@@ -54,9 +101,26 @@ export default function Home() {
     }
   };
 
-  const fetchNextMission = async () => {
+  const fetchNextMission = async (forcedMissionId?: number) => {
     try {
       const plans = await getPlans();
+
+      if (forcedMissionId) {
+        for (const plan of plans) {
+          const item = plan.items.find((i: any) => i.id === forcedMissionId);
+          if (item) {
+            setCurrentMission({
+              id: item.id,
+              planId: plan.id,
+              title: plan.title,
+              content: item.content,
+              understanding_score: item.understanding_score
+            });
+            return;
+          }
+        }
+      }
+
       // Find the first uncompleted item across all plans
       // For now, just take the first uncompleted item from the latest plan or priority 1
       for (const plan of plans) {
@@ -95,6 +159,12 @@ export default function Home() {
     }
   };
 
+  const handleExitMission = () => {
+    if (confirm("ミッションを中断してフリートークに戻りますか？")) {
+      setCurrentMission(null);
+    }
+  };
+
   const handleStartMission = () => {
     if (!currentMission) return;
     setInput(`${currentMission.content}について解説してください。どうやって進めればいいですか？`);
@@ -104,7 +174,8 @@ export default function Home() {
 
   // Poll for image upload status
   useEffect(() => {
-    if (!sessionId || uploadedImage) return;
+    // Only poll if QR is showing AND hasn't already got an image
+    if (!sessionId || !showQr || uploadedImage) return;
 
     const interval = setInterval(async () => {
       try {
@@ -113,6 +184,9 @@ export default function Home() {
           setUploadedImage(status.image_path);
           setShowQr(false);
           alert("画像がアップロードされました！");
+
+          // Clear image status on backend immediately so it won't be picked up again
+          await clearSessionImage(sessionId);
         }
       } catch (e) {
         console.error("Polling error", e);
@@ -120,7 +194,7 @@ export default function Home() {
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [sessionId, uploadedImage]);
+  }, [sessionId, uploadedImage, showQr]);
 
   const handleSend = async () => {
     if (!input.trim() && !uploadedImage) return;
@@ -138,7 +212,7 @@ export default function Home() {
         currentMission?.id
       );
 
-      setMessages((prev: any) => [...prev, { role: 'ai', content: res.response }]);
+      setMessages((prev: any) => [...prev, { role: 'assistant', content: res.response }]);
 
       // Update understanding score if returned
       if (res.understanding_score !== undefined && res.understanding_score !== null && currentMission) {
@@ -236,6 +310,13 @@ export default function Home() {
           >
             {showQr ? 'QRを隠す' : '📷 画像を同期 (スマホ連携)'}
           </button>
+
+          <Link
+            href="/admin/logs"
+            className="w-full text-center text-[10px] text-slate-300 hover:text-slate-500 transition-colors font-black uppercase tracking-widest pt-4 block"
+          >
+            対話ログを参照 (管理者)
+          </Link>
         </div>
       </div>
 
@@ -258,9 +339,17 @@ export default function Home() {
             <div className="max-w-4xl mx-auto bg-white rounded-[2rem] p-8 shadow-sm border border-indigo-100 flex flex-col md:flex-row items-center gap-8 relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-3 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-bl-xl tracking-tighter">FOR YOU</div>
               <div className="flex-1 text-center md:text-left">
-                <div className="text-indigo-600/60 text-xs font-bold mb-2 uppercase tracking-widest flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
-                  現在挑戦中のミッション: {currentMission.title}
+                <div className="text-indigo-600/60 text-xs font-bold mb-2 uppercase tracking-widest flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+                    実績報告モード: {currentMission.title}
+                  </div>
+                  <button
+                    onClick={handleExitMission}
+                    className="text-[10px] text-slate-400 hover:text-red-500 transition-colors font-black"
+                  >
+                    ✕ ミッションを中断
+                  </button>
                 </div>
                 <h2 className="text-2xl md:text-3xl font-black text-slate-800 leading-tight mb-4">
                   {currentMission.content}
@@ -333,8 +422,21 @@ export default function Home() {
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {messages.length === 0 && !currentMission && (
             <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-60">
-              <div className="text-6xl mb-4 grayscale">🏛️</div>
-              <p className="text-sm font-medium">学習の進め方や、わからない問題を詳しく解説します</p>
+              <div className="text-6xl mb-4 grayscale">💬</div>
+              <p className="text-sm font-medium">フリートークモード：知りたいことを何でも聞いてみよう</p>
+            </div>
+          )}
+
+          {currentMission && messages.length === 0 && (
+            <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-60">
+              <div className="text-6xl mb-4 grayscale">🏆</div>
+              <p className="text-sm font-medium mb-4">このミッションの実績を報告してください</p>
+              <button
+                onClick={() => setInput("今日の進捗を報告します：")}
+                className="bg-white border border-slate-200 text-indigo-600 px-6 py-3 rounded-2xl font-bold hover:bg-slate-50 transition-all shadow-sm"
+              >
+                📝 実績を入力する
+              </button>
             </div>
           )}
 
@@ -351,7 +453,7 @@ export default function Home() {
                 )}
                 <div className="whitespace-pre-wrap leading-relaxed text-[15px]">{msg.content}</div>
 
-                {msg.role === 'ai' && (
+                {msg.role === 'assistant' && (
                   <div className="mt-4 pt-4 border-t border-slate-50 flex justify-end">
                     <button
                       onClick={() => saveAsPlan(msg.content)}

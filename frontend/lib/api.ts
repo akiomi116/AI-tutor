@@ -45,6 +45,12 @@ export const sendChatMessage = async (message: string, sessionId?: string, image
   return res.json();
 };
 
+export const getChatHistory = async (sessionId: string) => {
+  const res = await fetch(`${API_BASE_URL}/chat/history/${sessionId}`);
+  if (!res.ok) throw new Error('Failed to fetch chat history');
+  return res.json();
+};
+
 /* --- Plans API --- */
 export const getPlans = async () => {
   const res = await fetch(`${API_BASE_URL}/plans/`);
@@ -117,5 +123,26 @@ export const updateSettings = async (learningMode: string) => {
     body: JSON.stringify({ learning_mode: learningMode }),
   });
   if (!res.ok) throw new Error('Failed to update settings');
+  return res.json();
+};
+
+/* --- Admin API --- */
+export const getAdminLogs = async (username?: string, sessionId?: string) => {
+  let url = `${API_BASE_URL}/admin/logs`;
+  const params = new URLSearchParams();
+  if (username) params.append('username', username);
+  if (sessionId) params.append('session_id', sessionId);
+  if (params.toString()) url += `?${params.toString()}`;
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Failed to fetch admin logs');
+  return res.json();
+};
+
+export const clearSessionImage = async (sessionId: string) => {
+  const res = await fetch(`${API_BASE_URL}/upload/session/${sessionId}/clear`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error('Failed to clear session image');
   return res.json();
 };
