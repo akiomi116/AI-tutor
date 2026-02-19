@@ -19,25 +19,67 @@
 ## セットアップ
 
 ### 前提条件
-- Node.js 18+
-- Python 3.10+
-- Google Cloud Project & Gemini API Key
+# AI-tutor
 
-### 1. バックエンド
+AIを活用した学習支援アプリケーション（フロントエンド: Next.js、バックエンド: FastAPI）。学習計画の生成、チャットによる質問応答、メモ・進捗管理などの機能を提供します。
+
+## 主要機能
+
+- AIチャットによる学習支援
+- AI生成の学習計画作成・保存
+- メモ（クイックメモ）の作成・管理
+- 音声入力やモバイル画像アップロードの補助
+
+## 技術スタック
+
+- フロントエンド: Next.js (App Router), React, TailwindCSS
+- バックエンド: FastAPI, SQLAlchemy, SQLite
+- AI: Google Gemini 系 API（設定が必要）
+
+## リポジトリ構成（抜粋）
+
+```
+AI-tutor/
+├── backend/        # FastAPI アプリケーション
+│   ├── main.py
+│   ├── requirements.txt
+│   └── app/        # アプリ本体 (routers, models, schemas など)
+├── frontend/       # Next.js フロントエンド
+│   ├── app/
+│   ├── components/
+│   └── lib/
+└── docs/           # ドキュメント／実績メモ
+```
+
+## ローカル開発（簡易手順）
+
+### 前提
+
+- Node.js (推奨: 18+)
+- Python (推奨: 3.10+)
+
+### バックエンド起動
+
+1. 仮想環境を作成・有効化
 
 ```powershell
 cd backend
-python -m venv venv
-.\venv\Scripts\Activate.ps1
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+```
 
-# .env ファイルを作成
-# GEMINI_API_KEY=your_api_key_here
+2. 必要な環境変数を用意（例: Gemini APIキー等）
 
+3. アプリ起動（開発モード）
+
+```powershell
 uvicorn main:app --reload --port 8000
 ```
 
-### 2. フロントエンド
+バックエンドは通常 `http://localhost:8000` で動作します。
+
+### フロントエンド起動
 
 ```powershell
 cd frontend
@@ -45,44 +87,37 @@ npm install
 npm run dev
 ```
 
-ブラウザで `http://localhost:9000` にアクセス
+Next.js はデフォルトで `http://localhost:3000` に立ち上がります（プロジェクト固有の設定がある場合はそちらを参照してください）。
 
-## プロジェクト構成
+## 設定メモ
 
-```
-AI-tutor/
-├── backend/           # FastAPI バックエンド
-│   ├── app/
-│   │   ├── routers/  # API エンドポイント
-│   │   ├── models.py # データベースモデル
-│   │   └── schemas.py # Pydantic スキーマ
-│   ├── main.py
-│   └── requirements.txt
-├── frontend/          # Next.js フロントエンド
-│   ├── app/          # App Router ページ
-│   ├── components/   # React コンポーネント
-│   └── lib/          # API クライアント
-└── docs/             # ドキュメント
-```
+- Google Gemini 等のAPIキーは環境変数や `.env` に設定してください。
+- DBは `backend/app/models.py` などでSQLiteを使用しています。プロダクション移行時は適宜設定変更が必要です。
 
-## 使い方
+## 貢献
 
-1. **学習計画の作成**
-   - AIに「〜の学習計画を作って」と依頼
-   - 「📅 この内容で計画を作成」ボタンで保存
+- Issue / PR を歓迎します。小さな改善やドキュメント修正からお願いします。
 
-2. **進捗管理**
-   - 計画詳細ページでタスクをチェック
-   - 進捗率が自動更新
+## 参照ファイル
 
-3. **メモ機能**
-   - 右下の黄色ペンアイコンをクリック
-   - クイックメモを作成・管理
+- バックエンド: [backend/main.py](backend/main.py)
+- フロントエンド: [frontend/app/page.tsx](frontend/app/page.tsx)
 
-## ライセンス
+---
+更新: 現在のリポジトリ構成に合わせてREADMEを簡潔に整理しました。
 
-MIT License
+## スクリーンショット
 
-## 作成者
+以下はプレースホルダーのスクリーンショットです。実際の画面キャプチャに差し替えてご利用ください。
 
-AI Assistant (Antigravity)
+- 概要画面
+
+![Overview](frontend/public/screenshots/overview.svg)
+
+- チャット画面
+
+![Chat](frontend/public/screenshots/chat.svg)
+
+- 学習計画画面
+
+![Plan](frontend/public/screenshots/plan.svg)

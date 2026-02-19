@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600">
+  <rect width="100%" height="100%" fill="#061826"/>
+  <g fill="#f0f9ff" font-family="Arial, Helvetica, sans-serif">
+    <text x="80" y="120" font-size="36" font-weight="700">Study Plan (プレースホルダー)</text>
+    <rect x="80" y="160" width="1040" height="360" rx="12" fill="#fff" opacity="0.03"/>
+    <g fill="#d6f0ff">
+      <rect x="110" y="200" width="980" height="48" rx="8"/>
+      <rect x="110" y="260" width="720" height="48" rx="8"/>
+      <rect x="110" y="320" width="420" height="48" rx="8"/>
+    </g>
+    <text x="110" y="235" font-size="18">計画: 1日目 — 基本概念の復習</text>
+    <text x="110" y="295" font-size="18">計画: 2日目 — 演習問題</text>
+    <text x="110" y="355" font-size="18">計画: 3日目 — 定着チェック</text>
+  </g>
+</svg>

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600">
+  <rect width="100%" height="100%" fill="#082032"/>
+  <g fill="#dff6ff" font-family="Arial, Helvetica, sans-serif">
+    <text x="80" y="120" font-size="36" font-weight="700">Chat UI (プレースホルダー)</text>
+    <rect x="80" y="160" width="960" height="320" rx="10" fill="#fff" opacity="0.04"/>
+    <g fill="#cde8f5">
+      <rect x="110" y="200" width="760" height="48" rx="8"/>
+      <rect x="110" y="260" width="520" height="48" rx="8"/>
+      <rect x="110" y="320" width="640" height="48" rx="8"/>
+    </g>
+    <text x="110" y="240" font-size="18">ユーザー: ここに質問を入力します...</text>
+    <text x="110" y="300" font-size="18">AI: 学習アドバイスを表示します...</text>
+  </g>
+</svg>
